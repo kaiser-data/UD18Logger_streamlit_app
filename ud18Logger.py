@@ -2,7 +2,7 @@ import asyncio
 import pandas as pd
 from bleak import BleakScanner, BleakClient
 from bleak.exc import BleakError
-from datetime import datetime
+from datetime import datetime, timedelta
 
 NOTIFY_CHAR_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb"
 WRITE_CHAR_UUID = "0000ffe2-0000-1000-8000-00805f9b34fb"
@@ -12,6 +12,10 @@ data_log = pd.DataFrame(columns=[
     "timestamp", "voltage", "current", "power", "capacity_mAh",
     "energy_Wh", "d_minus_V", "d_plus_V", "runtime"
 ])
+
+# Track last logged time
+last_logged_time = None
+LOG_INTERVAL_SECONDS = 5  # Log every 5 seconds
 
 
 def parse_ud18_packet(packet: bytes):
@@ -52,14 +56,29 @@ def parse_ud18_packet(packet: bytes):
 
 
 def notification_handler(sender, data: bytearray):
-    global data_log
+    global data_log, last_logged_time
     result = parse_ud18_packet(data)
     if result:
-        data_log = pd.concat([data_log, pd.DataFrame([result])], ignore_index=True)
-        print(f"Data logged at {result['timestamp']}")
-        print(result)
+        current_time = datetime.now()
+
+        # Check if the interval has passed since the last log
+        if last_logged_time is None or (current_time - last_logged_time).total_seconds() >= LOG_INTERVAL_SECONDS:
+            data_log = pd.concat([data_log, pd.DataFrame([result])], ignore_index=True)
+            last_logged_time = current_time
+            print(f"Data logged at {result['timestamp']}")
+            print(result)
+        else:
+            print(f"Skipped logging at {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
     else:
         print("Invalid packet received.")
+
+
+async def stop_logging_after(client, duration):
+    """Stops logging after a specified duration."""
+    await asyncio.sleep(duration)
+    print("Time limit reached. Stopping data collection.")
+    await client.stop_notify(NOTIFY_CHAR_UUID)
+    await client.disconnect()
 
 
 async def main():
@@ -81,16 +100,23 @@ async def main():
 
         try:
             await client.start_notify(NOTIFY_CHAR_UUID, notification_handler)
-            print("Subscribed to notifications. Logging data... Press Ctrl+C to stop.")
-            while True:
+            print("Subscribed to notifications. Logging data...")
+
+            # Set duration for logging (e.g., 60 seconds)
+            duration = 60
+            asyncio.create_task(stop_logging_after(client, duration))
+
+            # Keep the event loop running until stopped by the timer
+            while client.is_connected:
                 await asyncio.sleep(1)
+
         except BleakError as e:
             print(f"Notification subscription failed: {e}")
         finally:
-            if not data_log.empty:
-                csv_filename = f"ud18_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-                data_log.to_csv(csv_filename, index=False)
-                print(f"Data saved to {csv_filename}")
+            if client.is_connected:
+                await client.disconnect()
+            print("Disconnected from device.")
+
 
 if __name__ == "__main__":
     try:
