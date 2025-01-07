@@ -1,0 +1,99 @@
+import asyncio
+import pandas as pd
+from bleak import BleakScanner, BleakClient
+from bleak.exc import BleakError
+from datetime import datetime
+
+NOTIFY_CHAR_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb"
+WRITE_CHAR_UUID = "0000ffe2-0000-1000-8000-00805f9b34fb"
+
+# Global DataFrame to store BLE data
+data_log = pd.DataFrame(columns=[
+    "timestamp", "voltage", "current", "power", "capacity_mAh",
+    "energy_Wh", "d_minus_V", "d_plus_V", "runtime"
+])
+
+
+def parse_ud18_packet(packet: bytes):
+    if len(packet) == 37:
+        packet = packet[:36]
+    if len(packet) < 36 or packet[0] != 0xFF or packet[1] != 0x55 or packet[2] != 0x01:
+        return None
+
+    volt_raw = int.from_bytes(packet[4:7], byteorder='big')
+    amp_raw = int.from_bytes(packet[7:10], byteorder='big')
+    mah = int.from_bytes(packet[10:13], byteorder='big')
+    wh_raw = int.from_bytes(packet[13:17], byteorder='big')
+    dmin_raw = int.from_bytes(packet[17:19], byteorder='big')
+    dplus_raw = int.from_bytes(packet[19:21], byteorder='big')
+
+    voltage = volt_raw / 100.0
+    current = amp_raw / 100.0
+    power = voltage * current
+    wh = wh_raw / 100.0
+    d_minus = dmin_raw / 100.0
+    d_plus = dplus_raw / 100.0
+
+    hour = packet[24]
+    minute = packet[25]
+    second = packet[26]
+
+    return {
+        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        "voltage": voltage,
+        "current": current,
+        "power": power,
+        "capacity_mAh": mah,
+        "energy_Wh": wh,
+        "d_minus_V": d_minus,
+        "d_plus_V": d_plus,
+        "runtime": f"{hour:02d}:{minute:02d}:{second:02d}"
+    }
+
+
+def notification_handler(sender, data: bytearray):
+    global data_log
+    result = parse_ud18_packet(data)
+    if result:
+        data_log = pd.concat([data_log, pd.DataFrame([result])], ignore_index=True)
+        print(f"Data logged at {result['timestamp']}")
+        print(result)
+    else:
+        print("Invalid packet received.")
+
+
+async def main():
+    print("Scanning for 'UD18_BLE' device...")
+    devices = await BleakScanner.discover(timeout=5)
+
+    ud18_device = next((d for d in devices if d.name and "UD18_BLE" in d.name.upper()), None)
+    if not ud18_device:
+        print("No UD18_BLE device found. Exiting.")
+        return
+
+    print(f"Found {ud18_device.name} at {ud18_device.address}. Connecting...")
+    async with BleakClient(ud18_device) as client:
+        if not await client.is_connected():
+            print("Failed to connect.")
+            return
+
+        print(f"Connected to {ud18_device.name}")
+
+        try:
+            await client.start_notify(NOTIFY_CHAR_UUID, notification_handler)
+            print("Subscribed to notifications. Logging data... Press Ctrl+C to stop.")
+            while True:
+                await asyncio.sleep(1)
+        except BleakError as e:
+            print(f"Notification subscription failed: {e}")
+        finally:
+            if not data_log.empty:
+                csv_filename = f"ud18_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                data_log.to_csv(csv_filename, index=False)
+                print(f"Data saved to {csv_filename}")
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nScript interrupted. Exiting...")
