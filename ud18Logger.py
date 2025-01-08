@@ -1,21 +1,20 @@
 import asyncio
 import pandas as pd
 from bleak import BleakScanner, BleakClient
-from bleak.exc import BleakError
-from datetime import datetime, timedelta
+from datetime import datetime
+import os
 
 NOTIFY_CHAR_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb"
-WRITE_CHAR_UUID = "0000ffe2-0000-1000-8000-00805f9b34fb"
-
-# Global DataFrame to store BLE data
-data_log = pd.DataFrame(columns=[
-    "timestamp", "voltage", "current", "power", "capacity_mAh",
-    "energy_Wh", "d_minus_V", "d_plus_V", "runtime"
-])
-
-# Track last logged time
+CSV_FILE = "ble_data_log.csv"
+LOG_INTERVAL_SECONDS = 5
 last_logged_time = None
-LOG_INTERVAL_SECONDS = 5  # Log every 5 seconds
+
+
+def delete_existing_csv():
+    """Delete the existing CSV file if it exists."""
+    if os.path.exists(CSV_FILE):
+        os.remove(CSV_FILE)
+        print(f"Deleted existing {CSV_FILE}")
 
 
 def parse_ud18_packet(packet: bytes):
@@ -55,71 +54,49 @@ def parse_ud18_packet(packet: bytes):
     }
 
 
+def save_to_csv(data):
+    file_exists = os.path.isfile(CSV_FILE)
+    df = pd.DataFrame([data])
+    df.to_csv(CSV_FILE, mode='a', header=not file_exists, index=False)
+    print(f"Data saved to {CSV_FILE}")
+
+
 def notification_handler(sender, data: bytearray):
-    global data_log, last_logged_time
+    global last_logged_time
     result = parse_ud18_packet(data)
     if result:
         current_time = datetime.now()
-
-        # Check if the interval has passed since the last log
         if last_logged_time is None or (current_time - last_logged_time).total_seconds() >= LOG_INTERVAL_SECONDS:
-            data_log = pd.concat([data_log, pd.DataFrame([result])], ignore_index=True)
+            save_to_csv(result)
             last_logged_time = current_time
             print(f"Data logged at {result['timestamp']}")
-            print(result)
         else:
-            print(f"Skipped logging at {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
-    else:
-        print("Invalid packet received.")
-
-
-async def stop_logging_after(client, duration):
-    """Stops logging after a specified duration."""
-    await asyncio.sleep(duration)
-    print("Time limit reached. Stopping data collection.")
-    await client.stop_notify(NOTIFY_CHAR_UUID)
-    await client.disconnect()
+            print("Skipping data due to interval.")
 
 
 async def main():
-    print("Scanning for 'UD18_BLE' device...")
-    devices = await BleakScanner.discover(timeout=5)
+    delete_existing_csv()  # Ensure CSV is deleted before logging starts
 
+    devices = await BleakScanner.discover(timeout=5)
     ud18_device = next((d for d in devices if d.name and "UD18_BLE" in d.name.upper()), None)
     if not ud18_device:
         print("No UD18_BLE device found. Exiting.")
         return
 
-    print(f"Found {ud18_device.name} at {ud18_device.address}. Connecting...")
     async with BleakClient(ud18_device) as client:
         if not await client.is_connected():
             print("Failed to connect.")
             return
 
-        print(f"Connected to {ud18_device.name}")
+        await client.start_notify(NOTIFY_CHAR_UUID, notification_handler)
+        print("Logging data... Press Ctrl+C to stop.")
 
-        try:
-            await client.start_notify(NOTIFY_CHAR_UUID, notification_handler)
-            print("Subscribed to notifications. Logging data...")
-
-            # Set duration for logging (e.g., 60 seconds)
-            duration = 60
-            asyncio.create_task(stop_logging_after(client, duration))
-
-            # Keep the event loop running until stopped by the timer
-            while client.is_connected:
-                await asyncio.sleep(1)
-
-        except BleakError as e:
-            print(f"Notification subscription failed: {e}")
-        finally:
-            if client.is_connected:
-                await client.disconnect()
-            print("Disconnected from device.")
+        while True:
+            await asyncio.sleep(1)
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\nScript interrupted. Exiting...")
+        print("Logging stopped.")
