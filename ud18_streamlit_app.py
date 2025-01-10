@@ -8,6 +8,7 @@ import plotly.express as px
 CSV_FILE = "ble_data_log.csv"
 LOGGING_PROCESS = None  # Process handler for background logging
 
+st.set_page_config(layout="wide")  # Set layout to wide
 st.title("UD18 BLE Data Logger")
 
 # Initialize logging state
@@ -47,23 +48,23 @@ with tab1:
 
     # Voltage (V) Metric
     with col1:
-        voltage_box = st.metric(label="Voltage (V)", value="--")
+        voltage_html = st.empty()
         voltage_plot = st.empty()
 
     # Current (A) Metric
     with col2:
-        current_box = st.metric(label="Current (A)", value="--")
+        current_html = st.empty()
         current_plot = st.empty()
 
     # Power (W) Metric
     with col3:
-        power_box = st.metric(label="Power (W)", value="--")
+        power_html = st.empty()
         power_plot = st.empty()
 
     # D+ and D- Voltage Metrics
     with col4:
-        dplus_box = st.metric(label="D+ Voltage (V)", value="--")
-        dminus_box = st.metric(label="D- Voltage (V)", value="--")
+        # Display D+ and D- side by side
+        dplus_dminus_html = st.empty()
         dplus_dminus_plot = st.empty()
 
 # ---- Tab 2: Raw Data Table ----
@@ -91,39 +92,77 @@ while st.session_state["logging"]:
         # Get the latest row of data for metrics
         latest_data = df.iloc[-1]
 
-        # Update metric boxes with real-time data
-        voltage_box.metric(label="Voltage (V)", value=f"{latest_data['voltage']:.2f}")
-        current_box.metric(label="Current (A)", value=f"{latest_data['current']:.2f}")
-        power_box.metric(label="Power (W)", value=f"{latest_data['power']:.2f}")
-        dplus_box.metric(label="D+ Voltage (V)", value=f"{latest_data['d_plus_V']:.2f}")
-        dminus_box.metric(label="D- Voltage (V)", value=f"{latest_data['d_minus_V']:.2f}")
+        # HTML Styling for Metrics
+        voltage_color = "#636EFA"  # Voltage color
+        current_color = "#00CC96"  # Current color
+        power_color = "#EF553B"  # Power color
+        dplus_color = "#FFA15A"  # D+ Voltage color
+        dminus_color = "#AB63FA"  # D- Voltage color
+
+        voltage_html.markdown(
+            f"<h4 style='color:{voltage_color};'>Voltage (V)</h4>"
+            f"<h2 style='color:{voltage_color};'>{latest_data['voltage']:.2f}</h2>",
+            unsafe_allow_html=True,
+        )
+        current_html.markdown(
+            f"<h4 style='color:{current_color};'>Current (A)</h4>"
+            f"<h2 style='color:{current_color};'>{latest_data['current']:.2f}</h2>",
+            unsafe_allow_html=True,
+        )
+        power_html.markdown(
+            f"<h4 style='color:{power_color};'>Power (W)</h4>"
+            f"<h2 style='color:{power_color};'>{latest_data['power']:.2f}</h2>",
+            unsafe_allow_html=True,
+        )
+
+        # D+ and D- Metrics Side-by-Side
+        dplus_dminus_html.markdown(
+            f"""
+            <div style='display: flex; justify-content: space-between;'>
+                <div>
+                    <h4 style='color:{dplus_color};'>D+ Voltage (V)</h4>
+                    <h2 style='color:{dplus_color};'>{latest_data['d_plus_V']:.2f}</h2>
+                </div>
+                <div>
+                    <h4 style='color:{dminus_color};'>D- Voltage (V)</h4>
+                    <h2 style='color:{dminus_color};'>{latest_data['d_minus_V']:.2f}</h2>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
         # Power (Watt) over Time
         fig_power = px.line(df, x='elapsed_seconds', y='power', title='Power (Watt) over Time',
-                            color_discrete_sequence=["#EF553B"])
+                            color_discrete_sequence=[power_color])
         fig_power.update_layout(xaxis_title="Time (Seconds)", yaxis_title="Power (W)")
 
         # Voltage over Time
         fig_voltage = px.line(df, x='elapsed_seconds', y='voltage', title='Voltage over Time',
-                              color_discrete_sequence=["#636EFA"])
+                              color_discrete_sequence=[voltage_color])
         fig_voltage.update_layout(xaxis_title="Time (Seconds)", yaxis_title="Voltage (V)")
 
         # Current (Ampere) over Time
         fig_current = px.line(df, x='elapsed_seconds', y='current', title='Current (Ampere) over Time',
-                              color_discrete_sequence=["#00CC96"])
+                              color_discrete_sequence=[current_color])
         fig_current.update_layout(xaxis_title="Time (Seconds)", yaxis_title="Current (A)")
 
         # D+ and D- over Time (Dual Line Plot)
         fig_dplus_dminus = px.line(df, x='elapsed_seconds', y=['d_plus_V', 'd_minus_V'],
                                    title='D+ and D- Voltage over Time',
-                                   color_discrete_sequence=["#FFA15A", "#AB63FA"])
-        fig_dplus_dminus.update_layout(xaxis_title="Time (Seconds)", yaxis_title="Voltage (V)")
+                                   labels={"value": "Voltage (V)", "variable": "Signal"},
+                                   color_discrete_sequence=[dplus_color, dminus_color])
+        fig_dplus_dminus.update_layout(
+            xaxis_title="Time (Seconds)",
+            yaxis_title="Voltage (V)",
+            showlegend=False  # Remove legend
+        )
 
         # Update Plots
-        voltage_plot.plotly_chart(fig_voltage)
-        current_plot.plotly_chart(fig_current)
-        power_plot.plotly_chart(fig_power)
-        dplus_dminus_plot.plotly_chart(fig_dplus_dminus)
+        voltage_plot.plotly_chart(fig_voltage, use_container_width=True)
+        current_plot.plotly_chart(fig_current, use_container_width=True)
+        power_plot.plotly_chart(fig_power, use_container_width=True)
+        dplus_dminus_plot.plotly_chart(fig_dplus_dminus, use_container_width=True)
 
         # Update Data Table in Tab 2
         with data_table.container():

@@ -6,7 +6,7 @@ import os
 
 NOTIFY_CHAR_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb"
 CSV_FILE = "ble_data_log.csv"
-LOG_INTERVAL_SECONDS = 5
+LOG_INTERVAL_SECONDS = 1
 last_logged_time = None
 
 
