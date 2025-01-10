@@ -29,7 +29,7 @@ This project provides a **real-time data logger and visualizer** for UD18 BLE de
    - Logs are saved in real-time to `ble_data_log.csv`.
 
 2. **Live Visualization**  
-   - The Streamlit app (`app.py`) reads the data, updates key metrics, and renders live visualizations.
+   - The Streamlit app (`ud18_streamlit_app.py`) reads the data, updates key metrics, and renders live visualizations.
 
 3. **User Interaction**  
    - Users can control logging, view metrics, and switch between plots and the raw data table.
@@ -41,7 +41,7 @@ This project provides a **real-time data logger and visualizer** for UD18 BLE de
 
 📁 UD18-BLE-Logger/  
 │  
-├── app.py              - Streamlit app for visualization and control  
+├── ud18_streamlit_app.py              - Streamlit app for visualization and control  
 ├── ud18Logger.py       - BLE data logger script  
 ├── ble_data_log.csv    - CSV file storing logged data (auto-generated)  
 ├── README.md           - Project documentation  
