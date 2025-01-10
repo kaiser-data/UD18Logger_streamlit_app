@@ -34,7 +34,7 @@ This project provides a **real-time data logger and visualizer** for UD18 BLE de
 3. **User Interaction**  
    - Users can control logging, view metrics, and switch between plots and the raw data table.
 
-![App Screenshot](images/screenshot.jpg)  
+![App Screenshot](images/screenshot.png)  
 *Figure 2: Streamlit App Interface*
 
 ## Project Structure
