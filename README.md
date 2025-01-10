@@ -2,7 +2,7 @@
 
 This project provides a **real-time data logger and visualizer** for UD18 BLE devices. Using Python, BLE communication, and Streamlit, the app logs voltage, current, power, and D+/D- values, stores the data in a CSV file, and visualizes live metrics with interactive plots.
 
-![Device Photo](path/to/device_photo.jpg)  
+![Device Photo](images/device_photo.jpg)  
 *Figure 1: UD18 BLE Device*
 
 ## Features
@@ -34,7 +34,7 @@ This project provides a **real-time data logger and visualizer** for UD18 BLE de
 3. **User Interaction**  
    - Users can control logging, view metrics, and switch between plots and the raw data table.
 
-![App Screenshot](path/to/screenshot.jpg)  
+![App Screenshot](images/screenshot.jpg)  
 *Figure 2: Streamlit App Interface*
 
 ## Project Structure
